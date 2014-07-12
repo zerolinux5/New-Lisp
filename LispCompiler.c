@@ -30,13 +30,13 @@ void add_history(char* unused) {}
 
 int main(int argc, char** argv) {
    
-  puts("Lispy Version 0.0.0.0.1");
+  puts("ZeroLisp Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
    
   while (1) {
     
     /* Now in either case readline will be correctly defined */
-    char* input = readline("lispy> ");
+    char* input = readline("ZeroLisp> ");
     add_history(input);
 
     printf("Entered: %s\n", input);
