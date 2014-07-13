@@ -41,7 +41,7 @@ mpc_parser_t* Lispy    = mpc_new("lispy");
 mpca_lang(MPCA_LANG_DEFAULT,
   "                                                     \
     number   : /-?[0-9]+/ ;                             \
-    operator : '+' | '-' | '*' | '/' ;                  \
+    operator : '+' | '-' | '*' | '/' | \"add\"  | \"sub\" | \"mul\" | \"div\" ; \
     expr     : <number> | '(' <operator> <expr>+ ')' ;  \
     lispy    : /^/ <operator> <expr>+ /$/ ;             \
   ",
@@ -58,16 +58,16 @@ mpca_lang(MPCA_LANG_DEFAULT,
     add_history(input);
 
     /* Attempt to Parse the user Input */
-mpc_result_t r;
-if (mpc_parse("<stdin>", input, Lispy, &r)) {
-  /* On Success Print the AST */
-  mpc_ast_print(r.output);
-  mpc_ast_delete(r.output);
-} else {
-  /* Otherwise Print the Error */
-  mpc_err_print(r.error);
-  mpc_err_delete(r.error);
-}
+    mpc_result_t r;
+    if (mpc_parse("<stdin>", input, Lispy, &r)) {
+      /* On Success Print the AST */
+      mpc_ast_print(r.output);
+      mpc_ast_delete(r.output);
+    } else {
+      /* Otherwise Print the Error */
+      mpc_err_print(r.error);
+      mpc_err_delete(r.error);
+    }
     free(input);
     
   }
