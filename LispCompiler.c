@@ -21,20 +21,37 @@ void add_history(char* unused) {}
 
 #endif
 
-/* Add QEXPR as possible lval type */
-enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR };
+/* Forward Declarations */
 
-typedef struct lval {
+struct lval;
+struct lenv;
+typedef struct lval lval;
+typedef struct lenv lenv;
+
+/* Lisp Value */
+
+enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_FUN, LVAL_SEXPR, LVAL_QEXPR };
+
+typedef lval*(*lbuiltin)(lenv*, lval*);
+
+struct lval {
   int type;
 
   long num;
   char* err;
   char* sym;
-  
+  lbuiltin fun;
+
   int count;
-  struct lval** cell;
-  
-} lval;
+  lval** cell;
+};
+
+lval* lval_fun(lbuiltin func) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_FUN;
+  v->fun = func;
+  return v;
+}
 
 lval* lval_num(long x) {
   lval* v = malloc(sizeof(lval));
@@ -82,6 +99,7 @@ void lval_del(lval* v) {
     case LVAL_NUM: break;
     case LVAL_ERR: free(v->err); break;
     case LVAL_SYM: free(v->sym); break;
+    case LVAL_FUN: break;
     
     /* If Qexpr or Sexpr then delete all elements inside */
     case LVAL_QEXPR:
@@ -150,7 +168,37 @@ void lval_print(lval* v) {
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
     case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
+    case LVAL_FUN:   printf("<function>"); break;
   }
+}
+
+lval* lval_copy(lval* v) {
+  
+  lval* x = malloc(sizeof(lval));
+  x->type = v->type;
+  
+  switch (v->type) {
+    
+    /* Copy Functions and Numbers Directly */
+    case LVAL_FUN: x->fun = v->fun; break;
+    case LVAL_NUM: x->num = v->num; break;
+    
+    /* Copy Strings using malloc and strcpy */
+    case LVAL_ERR: x->err = malloc(strlen(v->err) + 1); strcpy(x->err, v->err); break;
+    case LVAL_SYM: x->sym = malloc(strlen(v->sym) + 1); strcpy(x->sym, v->sym); break;
+
+    /* Copy Lists by copying each sub-expression */
+    case LVAL_SEXPR:
+    case LVAL_QEXPR:
+      x->count = v->count;
+      x->cell = malloc(sizeof(lval*) * x->count);
+      for (int i = 0; i < x->count; i++) {
+        x->cell[i] = lval_copy(v->cell[i]);
+      }
+    break;
+  }
+  
+  return x;
 }
 
 void lval_println(lval* v) { lval_print(v); putchar('\n'); }
@@ -341,7 +389,7 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                                                         \
       number : /-?[0-9]+/ ;                                                                   \
-      symbol : \"list\" | \"head\" | \"tail\" | \"eval\" | \"join\" | '+' | '-' | '*' | '/' | '%' | '^' ;  \
+      symbol : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;  \
       sexpr  : '(' <expr>* ')' ;                                                              \
       qexpr  : '{' <expr>* '}' ;                                                              \
       expr   : <number> | <symbol> | <sexpr> | <qexpr> ;                                      \
