@@ -37,11 +37,18 @@ typedef lval*(*lbuiltin)(lenv*, lval*);
 struct lval {
   int type;
 
+  /* Basic */
   long num;
   char* err;
   char* sym;
-  lbuiltin fun;
 
+  /* Function */
+  lbuiltin builtin;
+  lenv* env;
+  lval* formals;
+  lval* body;
+
+  /* Expression */
   int count;
   lval** cell;
 };
@@ -55,7 +62,7 @@ struct lenv {
 lval* lval_fun(lbuiltin func) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_FUN;
-  v->fun = func;
+  v->builtin = func;
   return v;
 }
 
@@ -120,7 +127,13 @@ void lval_del(lval* v) {
     case LVAL_NUM: break;
     case LVAL_ERR: free(v->err); break;
     case LVAL_SYM: free(v->sym); break;
-    case LVAL_FUN: break;
+    case LVAL_FUN: 
+      if (!v->builtin) {
+        lenv_del(v->env);
+        lval_del(v->formals);
+        lval_del(v->body);
+      }
+    break;
     
     /* If Qexpr or Sexpr then delete all elements inside */
     case LVAL_QEXPR:
@@ -207,7 +220,13 @@ void lval_print(lval* v) {
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
     case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
-    case LVAL_FUN:   printf("<function>"); break;
+    case LVAL_FUN:
+      if (v->builtin) {
+        printf("<builtin>");
+      } else {
+        printf("(\\ "); lval_print(v->formals); putchar(' '); lval_print(v->body); putchar(')');
+      }
+    break;
   }
 }
 
@@ -219,7 +238,16 @@ lval* lval_copy(lval* v) {
   switch (v->type) {
     
     /* Copy Functions and Numbers Directly */
-    case LVAL_FUN: x->fun = v->fun; break;
+    case LVAL_FUN:
+      if (v->builtin) {
+        x->builtin = v->builtin;
+      } else {
+        x->builtin = NULL;
+        x->env = lenv_copy(v->env);
+        x->formals = lval_copy(v->formals);
+        x->body = lval_copy(v->body);
+      }
+    break;
     case LVAL_NUM: x->num = v->num; break;
     
     /* Copy Strings using malloc and strcpy */
@@ -276,6 +304,22 @@ void lenv_put(lenv* e, lval* k, lval* v) {
   e->vals[e->count-1] = lval_copy(v);
   e->syms[e->count-1] = malloc(strlen(k->sym)+1);
   strcpy(e->syms[e->count-1], k->sym);
+}
+
+lval* lval_lambda(lval* formals, lval* body) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_FUN;
+
+  /* Set Builtin to Null */
+  v->builtin = NULL;
+
+  /* Build new environment */
+  v->env = lenv_new();
+
+  /* Set Formals and Body */
+  v->formals = formals;
+  v->body = body;
+  return v;  
 }
 
 void lval_println(lval* v) { lval_print(v); putchar('\n'); }
@@ -478,7 +522,7 @@ lval* lval_eval_sexpr(lenv* e, lval* v) {
   }
 
   /* If so call function to get result */
-  lval* result = f->fun(e, v);
+  lval* result = f->builtin(e, v);
   lval_del(f);
   return result;
 }
